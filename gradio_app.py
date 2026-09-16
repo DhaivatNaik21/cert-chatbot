@@ -8,8 +8,8 @@ def handle_query(question):
     return answer_question(question, k=5)
 
 with gr.Blocks() as demo:
-    gr.Markdown("# Spark RAG Assistant")
-    inp = gr.Textbox(label="Your question about Spark", lines=2)
+    gr.Markdown("# Certifications Assistant")
+    inp = gr.Textbox(label="Your question about Certifications", lines=2)
     btn = gr.Button("Ask")
     out = gr.Textbox(label="Answer", lines=10)
 

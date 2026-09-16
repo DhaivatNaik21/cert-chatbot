@@ -1,7 +1,9 @@
 from pathlib import Path
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-DOC_DIR = Path("documents/spark")
+from langchain_community.document_loaders import Docx2txtLoader
+
+DOC_DIR = Path("documents/cert data")
 
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=512,
@@ -11,9 +13,20 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 def load_documents(doc_dir: Path):
     docs = []
-    for path in doc_dir.glob("*.txt"):
-        text = path.read_text(encoding="utf-8")
-        docs.append({"id": path.name, "path": str(path), "text": text})
+    for path in doc_dir.glob("*.docx"):
+        try:
+            loader = Docx2txtLoader(str(path))
+            loaded_docs = loader.load()
+
+            text = "\n".join([doc.page_content for doc in loaded_docs])
+
+            docs.append({"id": path.name, "path": str(path), "text": text})
+
+            print(f"Loaded document: {path.name}")
+        except Exception as e:
+            print(f"Error loading document {path.name}: {e}")
+    #     text = path.read_text(encoding="utf-8")
+    #     docs.append({"id": path.name, "path": str(path), "text": text})
     return docs
 
 def chunk_document(doc):

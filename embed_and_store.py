@@ -5,9 +5,9 @@ from pathlib import Path
 
 from ingest_and_chunk import load_documents, chunk_document
 
-DOC_DIR = Path("documents/spark")
+DOC_DIR = Path("documents/cert data")
 CHROMA_DIR = Path("chroma_db")
-COLLECTION_NAME = "spark_docs"
+COLLECTION_NAME = "cert_docs"
 
 # 1. Set up embedding model
 model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -55,7 +55,7 @@ def retrieve(query: str, k: int = 5):
 if __name__ == "__main__":
     build_index()
     # quick retrieval sanity check
-    res = retrieve("How do I create a DataFrame from JSON?")
+    res = retrieve("Whom can I contact for questions related to purchasing?")
     for doc, meta, dist in zip(res["documents"][0], res["metadatas"][0], res["distances"][0]):
         print("----")
         print(meta["doc_id"], meta["chunk_id"], "distance:", dist)
@@ -64,11 +64,11 @@ if __name__ == "__main__":
     print("__________________________Additional retrieval tests__________________________")
 
     test_queries = [
-    "How to programmatically define a schema using StructType and StructField in Spark?",
-    "What is a global temporary view and how is it different from a temporary view?",
-    "How does Spark SQL cache tables and how to uncache them?",
-    "What file formats does Spark natively support and how does it read them?",
-    "How to tune spark.sql.shuffle.partitions for a large join?",
+    "What are the requirements to obtain the CMFO certification?",
+    "How to renew a CCFO certification?",
+    "What information needs to be completed for a repeat participantfor CPWM certification?",
+    "What qualifications are required for a CTC exam?",
+    "When can a person be appointed or reappointed as a chief financial officer by a county?",
     ]
 
     for q in test_queries:
