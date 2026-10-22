@@ -1,376 +1,328 @@
-# The Unofficial Guide for Apache Spark
+# DLGS Certifications Assistant
 
-<!-- > **How to use this template:**
-> Complete each section *after* you've built and tested the corresponding part of your system.
-> Do not write placeholder text — if a section isn't done yet, leave it blank and come back.
-> Every section below is required for submission. One-liners will not receive full credit. -->
+An internal certification reference assistant being developed by the Digital Transformation Unit (DTU) for the Division of Local Government Services (DLGS), New Jersey Department of Community Affairs.
 
----
+The application uses retrieval-augmented generation (RAG) to help staff locate and understand information from certification reference documents and statutes. Relevant document passages are retrieved from a local vector database and supplied to a language model to generate plain-language answers with source references.
 
-## Domain
+## Development Status
 
+This project is a local development prototype intended for development and testing. It is not a production service. Document coverage, retrieval quality, answer accuracy, and the user interface remain under development. Generated answers should be checked against the cited materials before being used in certification work.
 
-<!-- What topic or category of knowledge does your system cover?
-     Why is this knowledge valuable, and why is it hard to find through official channels?
-     Example: "Student reviews of CS professors at [university] — useful because official
-     course descriptions don't reflect teaching style, exam difficulty, or workload." -->
-This system covers Apache Spark SQL and DataFrame Usage, extracted from Spark SQL documentation. The goal is to have a robust system to answer questions on schema definition, temp views, caching, file formats and tuning join without re-reading long documentation pages.
-This is valuable because official documentation is verbose, while this system allows you to ask direct questions and get succinct and cited answers focused on code and config.
----
+## Purpose and Scope
 
-## Document Sources
+The assistant is intended to support staff researching certification requirements, application materials, exam qualifications, exemptions, appointments, renewals, and related questions covered by the available documents.
 
-<!-- List every source you collected documents from.
-     Be specific: include URLs, subreddit names, forum thread titles, or file names.
-     Aim for variety — sources that together cover different subtopics or perspectives. -->
-All documents are local .txt files under documents/spark, each extracted from sections of Apache Spark documentation on spark.apache.org and split by topic.
+The intended certification scope includes:
 
-```text
-+----+-------------+--------------------------------------------+-----------------------------------------------------------------------------+
-| #  |   Source    |                Description                 |                               URL or location                               |
-+----+-------------+--------------------------------------------+-----------------------------------------------------------------------------+
-|  1 | Document 1  | Spark Session and Dataframes               | documents\spark\Document 1 - SparkSession and DataFrames.txt                |
-|  2 | Document 2  | SQL Queries and Global Temporary Views     | documents\spark\Document 2 - SQL Queries and Global Temporary Views.txt     |
-|  3 | Document 3  | RDDs, Scalar and Aggregate Functions       | documents\spark\Document 3 - RDDs, Scalar and Aggregate Functions.txt       |
-|  4 | Document 4  | Performance Tuning, Caching and Partitions | documents\spark\Document 4 - Performance Tuning, Caching and Partitions.txt |
-|  5 | Document 5  | Optimizing Join Strategy                   | documents\spark\Document 5 - Optimizing Join Strategy.txt                   |
-|  6 | Document 6  | Storage Partition and Join                 | documents\spark\Document 6 - Storage Partition and Join.txt                 |
-|  7 | Document 7  | Generic Load and Save Options              | documents\spark\Document 7 - Generic Load and Save Options.txt              |
-|  8 | Document 8  | Generic File Source Options                | documents\spark\Document 8 - Generic File Source Options.txt                |
-|  9 | Document 9  | Parquet Files                              | documents\spark\Document 9 - Parquet Files.txt                              |
-| 10 | Document 10 | JSON Files                                 | documents\spark\Document 10 - JSON Files.txt                                |
-| 11 | Document 11 | ORC Files                                  | documents\spark\Document 11 - ORC Files.txt                                 |
-| 12 | Document 12 | CSV Files                                  | documents\spark\Document 12 - CSV Files.txt                                 |
-+----+-------------+--------------------------------------------+-----------------------------------------------------------------------------+
-```
+- CMFO
+- CPWM
+- CTC
+- QPA
+- RMC
+- CCFO
 
----
+Exemption pathways include CMFO/RMA, CPWM/PE, and QPA/SBA where addressed by the available source material. Intended scope does not establish complete document coverage. The assistant can answer only from the passages retrieved from the indexed corpus. The application is a reference aid. It does not make final eligibility, appointment, enforcement, or legal determinations.
 
-## Chunking Strategy
+## How It Works
 
-<!-- Describe your chunking approach with enough specificity that someone else could reproduce it.
-     Include:
-     - Chunk size (characters or tokens) and why that size fits your documents
-     - Overlap size and why (or why not) you used overlap
-     - Any preprocessing you did before chunking (e.g., stripping HTML, removing headers)
-     - What your final chunk count was across all documents -->
-**Chunk size:**
+The application separates document indexing from question answering.
 
-512 characters
+### Document indexing
 
-**Overlap:**
+1. Load DOCX files from `documents/cert data/`.
+2. Extract their text.
+3. Split the text into overlapping chunks.
+4. Generate embeddings for each chunk.
+5. Store the text, embeddings, and source identifiers in a persistent ChromaDB collection.
 
-100 characters
+### Question answering
 
-**Why these choices fit your documents:**
+1. Generate an embedding for the user's question.
+2. Retrieve the five nearest document chunks by default.
+3. Assemble the retrieved text and document/chunk identifiers into a context block.
+4. Send the question and context to the Groq-hosted generation model.
+5. Display the generated answer in the Gradio interface or CLI.
 
-Before chunking, each .txt file is loaded from documents/spark and basic cleaning is applied; stripping extra whitespace and preserving existing line breaks so that code blocks and tables remain readable. 
-Documents are then split using RecursiveCharacterTextSplitter with paragraph boundaries, then line breaks, and then spaces using ["\n\n", "\n", " ", ""].
+The application does not perform live web searches.
 
-The chunk size is 512 characters with an overlap of 100 characters, which is enough to hold a short example plus a code sample and also small enough that each chunk stays on a single topic and similary search can distinguish between sections.
-An overlap of 100 characters lets definitions and their examples without losing context.
+## Technology Stack
 
-Across the 12 source documents, this strategy produced 258 chunks, which is a good size for local sentence-transformer embeddings and ChromaDB retrieval.
+- Language: Python
+- Interface: Gradio
+- Document loading: LangChain Community `Docx2txtLoader`
+- Text splitting: LangChain `RecursiveCharacterTextSplitter`
+- Embeddings: Sentence Transformers `all-MiniLM-L6-v2`
+- Vector storage: Persistent ChromaDB
+- Generation provider: Groq
+- Generation model: `openai/gpt-oss-20b`
+- Environment configuration: `python-dotenv`
 
-**Final chunk count:**
-
-258 chunks
-
----
-
-## Embedding Model
-
-<!-- Name the embedding model you used and explain your choice.
-     Then answer: if you were deploying this system for real users and cost wasn't a constraint,
-     what tradeoffs would you weigh in choosing a different model?
-     Consider: context length limits, multilingual support, accuracy on domain-specific text,
-     latency, and local vs. API-hosted. -->
-
-**Model used:**
-
-sentence-transformers/all-MiniLM-L6-v2 with ChromaDB as the vector store
-
-**Production tradeoff reflection:**
-
-For a production deployment, it would be worth considering a larger or domain-tuned embedding model that supports longer context windows so each embedding can represent more complex sections, and is more code-aware or technical-text-tuned for Spark/Scala/PySpark snippets, which might improve similarity on questions.
-
----
-
-## Grounded Generation
-
-<!-- Explain how your system enforces grounding — how does it prevent the LLM from answering
-     beyond the retrieved documents?
-     Describe both your system prompt (what instruction you gave the model) and any structural
-     choices (e.g., how you formatted the context, whether you filtered low-relevance chunks).
-     Do not just say "I told it to use the documents" — show the actual instruction or explain
-     the mechanism. -->
-
-**System prompt grounding instruction:**
-
-“You are a Spark SQL assistant. Answer the user's question using ONLY the provided context chunks from the Spark documentation. If the context does not contain enough information to answer, say: ‘I don't have enough information in the provided documents to answer that.’ Do NOT use any outside knowledge or guess beyond the context. Always mention which document IDs and chunk IDs you used in your answer."
-
-Structurally, only the top‑k retrieved chunks from Chroma (default k=5) are passed to the LLM alongside the question; the model never sees the full documents or the internet. 
-
-**How source attribution is surfaced in the response:**
-
-When building the context string, each chunk is tagged with its doc_id and chunk_id, e.g. "Document 4 - Performance Tuning, Caching and Partitions.txt | chunk 1" before the chunk text. The prompt tells the model to mention which documents and chunks it used.
-
----
-
-## Evaluation Report
-
-<!-- Run your 5 test questions from planning.md through your system and record the results.
-     Be honest — a partially accurate or inaccurate result that you explain well is more
-     valuable than a suspiciously perfect result. -->
+## Repository Structure
 
 ```text
-.................................................................................................................................................
-: # :         Question          :  Expected answer (short)  :      System response      :     Retrieval quality     :     Response accuracy     :
-:   :                           :                           :       (summarized)        :                           :                           :
-:...:...........................:...........................:...........................:...........................:...........................:
-: 1 : How to programmatically   : Define a StructType       : Described the three-step  : Relevant – top chunks are : Accurate – matches the    :
-:   : define a schema using     : composed of StructFields  : process: create an RDD of : the “Programmatically     : documented pattern and    :
-:   : StructType and            : (name, type, nullable)    : tuples, build a           : Specifying the Schema”    : explains                  :
-:   : StructField in Spark?     : and apply it when         : StructType schema with    : section and examples.     : StructType/StructField    :
-:   :                           : creating the DataFrame,   : StructFields from         :                           : correctly.                :
-:   :                           : e.g. schema =             : pyspark.sql.types, and    :                           :                           :
-:   :                           : StructType([StructField(" : apply it via              :                           :                           :
-:   :                           : name",                    : spark.createDataFrame(peo :                           :                           :
-:   :                           : StringType(), True),      : ple,                      :                           :                           :
-:   :                           : ...]) then                : schema), and showed a     :                           :                           :
-:   :                           : spark.createDataFrame(rdd : code snippet. Cited       :                           :                           :
-:   :                           : ,                         : Document 3, chunk 7.      :                           :                           :
-:   :                           : schema) or                :                           :                           :                           :
-:   :                           : spark.read.schema(schema) :                           :                           :                           :
-:   :                           : ....                      :                           :                           :                           :
-: 2 : What is a global          : Temp view is              : Explained that a global   : Highly relevant –         : Accurate – aligns fully   :
-:   : temporary view and how is : session-scoped and        : temp view is              : retrieval pulled exactly  : with the docs.            :
-:   : it different from a       : disappears when its       : cross-session, tied to    : the “Global Temporary     :                           :
-:   : temporary view?           : SparkSession ends. Global : global_temp, referenced   : View” explanation and     :                           :
-:   :                           : temp view is shared       : as global_temp.view1, and : code examples.            :                           :
-:   :                           : across sessions within    : persists until the Spark  :                           :                           :
-:   :                           : the same application and  : application ends, while a :                           :                           :
-:   :                           : lives until the app       : regular temp view is      :                           :                           :
-:   :                           : terminates; it resides in : session-scoped and        :                           :                           :
-:   :                           : the global_temp database  : disappears with the       :                           :                           :
-:   :                           : and must be referenced as : session. Cited Document   :                           :                           :
-:   :                           : global_temp.view_name.    : 2, chunks 2–3.            :                           :                           :
-: 3 : How does Spark SQL cache  : Spark SQL caches tables   : Answered that Spark SQL   : Relevant – top chunk is   : Partially accurate – core :
-:   : tables and how to uncache : or DataFrames using       : caches tables using       : the “Caching Data”        : behavior                  :
-:   : them?                     : spark.catalog.cacheTable( : spark.catalog.cacheTable( : section and neighboring   : (cacheTable/cache,        :
-:   :                           : ...)                      : "tableName")              : tuning content.           : uncacheTable/unpersist)   :
-:   :                           : or dataFrame.cache() in   : or dataFrame.cache() and  :                           : is correct; answer omits  :
-:   :                           : an in-memory columnar     : uncaches using            :                           : SQL CACHE TABLE/UNCACHE   :
-:   :                           : format. To uncache, use   : spark.catalog.uncacheTabl :                           : TABLE and clearCache(),   :
-:   :                           : spark.catalog.uncacheTabl : e("tableName")            :                           : which are mentioned in    :
-:   :                           : e(...)                    : or dataFrame.unpersist(), :                           : the broader docs.         :
-:   :                           : or dataFrame.unpersist(). : explicitly referencing    :                           :                           :
-:   :                           :                           : the in-memory columnar    :                           :                           :
-:   :                           :                           : cache and memory removal. :                           :                           :
-:   :                           :                           : Cited Document 4, chunk   :                           :                           :
-:   :                           :                           : 1.                        :                           :                           :
-: 4 : What file formats does    : From the ingested docs    : Listed CSV (using         : Relevant – retrieval      : Partially accurate –      :
-:   : Spark natively support in : the main formats are CSV, : spark.read().csv("file_na : pulled CSV, JSON, and     : completely correct for    :
-:   : this corpus, and how does : JSON, and Parquet; Spark  : me")),                    : Parquet sections plus     : CSV/JSON/Parquet in the   :
-:   : it read them?             : reads them using          : JSON                      : generic load/save         : provided docs, but does   :
-:   :                           : spark.read().csv(...),    : (spark.read().json("file_ : options.                  : not mention ORC/text/Avro :
-:   :                           : spark.read().json(...),   : name")),                  :                           : even though those exist   :
-:   :                           : and                       : and Parquet (Spark can    :                           : in broader Spark docs but :
-:   :                           : spark.read().parquet(...) : read and write Parquet    :                           : are not fully represented :
-:   :                           : ,                         : while preserving schema), :                           : in this extracted corpus. :
-:   :                           : with behavior customized  : and explained that these  :                           :                           :
-:   :                           : via .option() or          : use spark.read methods    :                           :                           :
-:   :                           : .options().               : and can be customized     :                           :                           :
-:   :                           :                           : with option(). Cited      :                           :                           :
-:   :                           :                           : Documents 12, 9, and 7.   :                           :                           :
-: 5 : How to tune               : Either tune               : Explained that for large  : Relevant – retrieval      : Accurate – focuses on     :
-:   : spark.sql.shuffle.partiti : spark.sql.shuffle.partiti : joins you should set a    : surfaced the “Optimizing  : AQE-based tuning instead  :
-:   : ons                       : ons                       : sufficiently large        : Join Strategy” section    : of manual static          :
-:   : for a large join?         : directly via              : initial number of shuffle : describing AQE coalescing : partition count, which    :
-:   :                           : spark.conf.set(...), or,  : partitions and enable     : of shuffle partitions,    : matches the guidance in   :
-:   :                           : as the docs suggest,      : adaptive query execution  : plus related              : the ingested docs.        :
-:   :                           : start with a large        : (spark.sql.adaptive.enabl : join/partition configs.   :                           :
-:   :                           : initial partition count   : ed                        :                           :                           :
-:   :                           : and let Adaptive Query    : and                      :                           :                           :
-:   :                           : Execution coalesce        : spark.sql.adaptive.coales :                           :                           :
-:   :                           : partitions using          : cePartitions.enabled),    :                           :                           :
-:   :                           : spark.sql.adaptive.coales : letting Spark coalesce    :                           :                           :
-:   :                           : cePartitions.*            : post-shuffle partitions   :                           :                           :
-:   :                           : settings.                 : based on runtime stats,   :                           :                           :
-:   :                           :                           : and mentioned related     :                           :                           :
-:   :                           :                           : settings like             :                           :                           :
-:   :                           :                           : initialPartitionNum and   :                           :                           :
-:   :                           :                           : minPartitionSize. Cited   :                           :                           :
-:   :                           :                           : Document 5, chunks 8–9    :                           :                           :
-:   :                           :                           : and Document 6.           :                           :                           :
-:...:...........................:...........................:...........................:...........................:...........................:
+CERT-CHATBOT/
+├── documents/
+│   └── cert data/             # Certification reference DOCX files
+├── chroma_db/                 # Generated local vector database
+├── evaluation/
+│   ├── __init__.py
+│   ├── queries.py             # Reference questions for retrieval testing
+│   └── evaluate_retrieval.py  # Inspect retrieved passages and distances
+├── config.py                  # Shared paths and pipeline settings
+├── ingest_and_chunk.py        # Document loading and chunking
+├── embed_and_store.py         # Index construction and retrieval
+├── answer.py                  # Context assembly, generation, and CLI
+├── gradio_app.py              # Local web interface
+├── requirements.txt           # Python dependencies
+├── planning.md                # Development planning material
+├── README.md
+└── .gitignore
 ```
 
-<!-- 
-.................................................................................................................................................
-: # :         Question          :  Expected answer (short)  :      System response      :     Retrieval quality     :     Response accuracy     :
-:   :                           :                           :       (summarized)        :                           :                           :
-:...:...........................:...........................:...........................:...........................:...........................:
-: 1 : How to programmatically   : Define a StructType       : Described the three-step  : Relevant – top chunks are : Accurate – matches the    :
-:   : define a schema using     : composed of StructFields  : process: create an RDD of : the “Programmatically     : documented pattern and    :
-:   : StructType and            : (name, type, nullable)    : tuples, build a           : Specifying the Schema”    : explains                  :
-:   : StructField in Spark?     : and apply it when         : StructType schema with    : section and examples.     : StructType/StructField    :
-:   :                           : creating the DataFrame,   : StructFields from         :                           : correctly.                :
-:   :                           : e.g. schema =             : pyspark.sql.types, and    :                           :                           :
-:   :                           : StructType([StructField(" : apply it via              :                           :                           :
-:   :                           : name",                    : spark.createDataFrame(peo :                           :                           :
-:   :                           : StringType(), True),      : ple,                      :                           :                           :
-:   :                           : ...]) then                : schema), and showed a     :                           :                           :
-:   :                           : spark.createDataFrame(rdd : code snippet. Cited       :                           :                           :
-:   :                           : ,                         : Document 3, chunk 7.      :                           :                           :
-:   :                           : schema) or                :                           :                           :                           :
-:   :                           : spark.read.schema(schema) :                           :                           :                           :
-:   :                           : ....                      :                           :                           :                           :
-: 2 : What is a global          : Temp view is              : Explained that a global   : Highly relevant –         : Accurate – aligns fully   :
-:   : temporary view and how is : session-scoped and        : temp view is              : retrieval pulled exactly  : with the docs.            :
-:   : it different from a       : disappears when its       : cross-session, tied to    : the “Global Temporary     :                           :
-:   : temporary view?           : SparkSession ends. Global : global_temp, referenced   : View” explanation and     :                           :
-:   :                           : temp view is shared       : as global_temp.view1, and : code examples.            :                           :
-:   :                           : across sessions within    : persists until the Spark  :                           :                           :
-:   :                           : the same application and  : application ends, while a :                           :                           :
-:   :                           : lives until the app       : regular temp view is      :                           :                           :
-:   :                           : terminates; it resides in : session-scoped and        :                           :                           :
-:   :                           : the global_temp database  : disappears with the       :                           :                           :
-:   :                           : and must be referenced as : session. Cited Document   :                           :                           :
-:   :                           : global_temp.view_name.    : 2, chunks 2–3.            :                           :                           :
-: 3 : How does Spark SQL cache  : Spark SQL caches tables   : Answered that Spark SQL   : Relevant – top chunk is   : Partially accurate – core :
-:   : tables and how to uncache : or DataFrames using       : caches tables using       : the “Caching Data”        : behavior                  :
-:   : them?                     : spark.catalog.cacheTable( : spark.catalog.cacheTable( : section and neighboring   : (cacheTable/cache,        :
-:   :                           : ...)                      : "tableName")              : tuning content.           : uncacheTable/unpersist)   :
-:   :                           : or dataFrame.cache() in   : or dataFrame.cache() and  :                           : is correct; answer omits  :
-:   :                           : an in-memory columnar     : uncaches using            :                           : SQL CACHE TABLE/UNCACHE   :
-:   :                           : format. To uncache, use   : spark.catalog.uncacheTabl :                           : TABLE and clearCache(),   :
-:   :                           : spark.catalog.uncacheTabl : e("tableName")            :                           : which are mentioned in    :
-:   :                           : e(...)                    : or dataFrame.unpersist(), :                           : the broader docs.         :
-:   :                           : or dataFrame.unpersist(). : explicitly referencing    :                           :                           :
-:   :                           :                           : the in-memory columnar    :                           :                           :
-:   :                           :                           : cache and memory removal. :                           :                           :
-:   :                           :                           : Cited Document 4, chunk   :                           :                           :
-:   :                           :                           : 1.                        :                           :                           :
-: 4 : What file formats does    : From the ingested docs    : Listed CSV (using         : Relevant – retrieval      : Partially accurate –      :
-:   : Spark natively support in : the main formats are CSV, : spark.read().csv("file_na : pulled CSV, JSON, and     : completely correct for    :
-:   : this corpus, and how does : JSON, and Parquet; Spark  : me")),                    : Parquet sections plus     : CSV/JSON/Parquet in the   :
-:   : it read them?             : reads them using          : JSON                      : generic load/save         : provided docs, but does   :
-:   :                           : spark.read().csv(...),    : (spark.read().json("file_ : options.                  : not mention ORC/text/Avro :
-:   :                           : spark.read().json(...),   : name")),                  :                           : even though those exist   :
-:   :                           : and                       : and Parquet (Spark can    :                           : in broader Spark docs but :
-:   :                           : spark.read().parquet(...) : read and write Parquet    :                           : are not fully represented :
-:   :                           : ,                         : while preserving schema), :                           : in this extracted corpus. :
-:   :                           : with behavior customized  : and explained that these  :                           :                           :
-:   :                           : via .option() or          : use spark.read methods    :                           :                           :
-:   :                           : .options().               : and can be customized     :                           :                           :
-:   :                           :                           : with option(). Cited      :                           :                           :
-:   :                           :                           : Documents 12, 9, and 7.   :                           :                           :
-: 5 : How to tune               : Either tune               : Explained that for large  : Relevant – retrieval      : Accurate – focuses on     :
-:   : spark.sql.shuffle.partiti : spark.sql.shuffle.partiti : joins you should set a    : surfaced the “Optimizing  : AQE-based tuning instead  :
-:   : ons                       : ons                       : sufficiently large        : Join Strategy” section    : of manual static          :
-:   : for a large join?         : directly via              : initial number of shuffle : describing AQE coalescing : partition count, which    :
-:   :                           : spark.conf.set(...), or,  : partitions and enable     : of shuffle partitions,    : matches the guidance in   :
-:   :                           : as the docs suggest,      : adaptive query execution  : plus related              : the ingested docs.        :
-:   :                           : start with a large        : (spark.sql.adaptive.enabl : join/partition configs.   :                           :
-:   :                           : initial partition count   : ed                        :                           :                           :
-:   :                           : and let Adaptive Query    : and                       :                           :                           :
-:   :                           : Execution coalesce        : spark.sql.adaptive.coales :                           :                           :
-:   :                           : partitions using          : cePartitions.enabled),    :                           :                           :
-:   :                           : spark.sql.adaptive.coales : letting Spark coalesce    :                           :                           :
-:   :                           : cePartitions.*            : post-shuffle partitions   :                           :                           :
-:   :                           : settings.                 : based on runtime stats,   :                           :                           :
-:   :                           :                           : and mentioned related     :                           :                           :
-:   :                           :                           : settings like             :                           :                           :
-:   :                           :                           : initialPartitionNum and   :                           :                           :
-:   :                           :                           : minPartitionSize. Cited   :                           :                           :
-:   :                           :                           : Document 5, chunks 8–9    :                           :                           :
-:   :                           :                           : and Document 6.           :                           :                           :
-:...:...........................:...........................:...........................:...........................:...........................: -->
+Local configuration files such as `.env` and the virtual environment are not source documents and should not be committed.
+
+## Local Setup
+
+Run the following commands from the repository root.
+
+### 1. Clone the repository
+
+```bash
+git clone <repository-url>
+cd <repository-directory>
+```
+
+Replace the placeholders with the private repository URL and the local directory created by cloning.
+
+### 2. Create and activate a virtual environment
+
+```bash
+python -m venv .venv
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+macOS or Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+### 3. Install dependencies
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+### 4. Configure the Groq API key
+
+Create a `.env` file in the repository root:
+
+```dotenv
+GROQ_API_KEY=your_api_key_here
+```
+
+An environment variable named `GROQ_API_KEY` may also be used.
+
+Do not commit API keys or other credentials. A network connection is required to call the Groq API. Initial embedding model setup may also require downloading model files.
+
+## Configuration
+
+Shared application settings are defined in `config.py`, including:
+
+- Source-document and vector-database paths.
+- ChromaDB collection name.
+- Embedding and generation models.
+- Chunk size, overlap, and split boundaries.
+- Default retrieval count.
+- Generation temperature.
+
+Paths are resolved relative to the project directory.
+
+Current baseline settings:
+
+- Chunk size: 512 characters.
+- Chunk overlap: 100 characters.
+- Embedding model: `all-MiniLM-L6-v2`.
+- Default retrieval count: 5 chunks.
+- Generation model: `openai/gpt-oss-20b`.
+- Generation temperature: 0.1.
+
+Keep credentials in `.env` or environment variables, not in `config.py`.
+
+Restart the application after changing configuration settings. Changes to chunking or the embedding model require rebuilding the index. Changes to the retrieval count, generation model, or temperature do not
+require rebuilding the index.
+
+## Source Documents
+
+Place supported source documents in:
+
+```text
+documents/cert data/
+```
+
+The current loader reads `.docx` files directly inside this directory.
+
+It does not currently load PDF or plain-text files, and it does not recursively scan subdirectories. Source filenames are used as document identifiers in the index and answer context. Use descriptive filenames and check extracted text when adding or updating documents. Adding a document to the directory does not automatically make it available to the chatbot. The document must be indexed.
+
+## Indexing Documents
+
+### Optional: inspect ingestion and chunking
+
+```bash
+python ingest_and_chunk.py
+```
+
+This command loads the documents, reports document and chunk counts, and prints sample chunks for inspection. It does not persist an index or save chunks to an intermediate file.
+
+### Build the vector index
+
+```bash
+python embed_and_store.py
+```
+
+This command loads and chunks the source documents, generates embeddings, and stores records in the local ChromaDB collection.
+
+Running `ingest_and_chunk.py` separately is not required: the indexing script imports and runs the document-loading and chunking functions.
+
+Current index configuration:
+
+- Source directory: `documents/cert data/`
+- Database directory: `chroma_db/`
+- Collection: `cert_docs`
+- Chunk size: 512 characters
+- Chunk overlap: 100 characters
+- Split boundaries: paragraphs, line breaks, spaces, then character fallback
+- Similarity metric: cosine distance
+- Chunk metadata: document filename and zero-based chunk identifier
+
+Document and chunk counts depend on the current corpus and are not fixed. The indexing script loads and chunks source documents, generates embeddings, stores records in ChromaDB, and reports the collection's chunk count. Retrieval questions are run separately through the evaluation script.
+
+## Updating the Corpus
+
+The current indexing implementation uses `collection.add()`. It is not a complete document-synchronization mechanism.
+
+For a clean rebuild after editing, removing, or renaming source documents:
+
+1. Stop the running application.
+2. Confirm the source directory contains the intended documents.
+3. Delete the generated `cert_docs` collection.
+4. Run the indexing script again.
+5. Restart the application and verify representative answers.
+
+The following command deletes the local `cert_docs` collection. It does not delete source documents. Run it only when intentionally rebuilding this project's index.
+
+```bash
+python -c "import chromadb; chromadb.PersistentClient(path='chroma_db').delete_collection(name='cert_docs')"
+```
+
+Then rebuild:
+
+```bash
+python embed_and_store.py
+```
+
+If the collection does not exist, skip the deletion step and build the index directly.
+
+## Running the Assistant/Testing
+
+Reference questions are maintained in `evaluation/queries.py`.
+
+To inspect the passages retrieved from the existing index, run the following command from the repository root:
+
+```bash
+python -m evaluation.evaluate_retrieval
+```
+
+The script prints each question, retrieved passages, document and chunk identifiers, and cosine distances.
+
+It does not rebuild the index or call the generation API. Build the index before running it.
+
+This is a manual retrieval-inspection tool, not an automated accuracy evaluation. Review whether the retrieved passages contain the evidence, conditions, and exceptions needed to answer each question.
+
+### Web interface
+
+```bash
+python gradio_app.py
+```
+
+Open the local URL printed in the terminal.
+
+Starting the interface does not ingest documents or rebuild embeddings.
+
+### Command-line interface
+
+```bash
+python answer.py
+```
+
+Enter a question at the prompt. Enter `exit` or `quit` to stop.
+
+## Answer Behavior and References
+
+The generation prompt instructs the model to:
+
+- Use only the supplied certification context for factual answers.
+- Explain supported information in plain language.
+- Distinguish requirements from interpretations and suggested next steps.
+- Identify insufficient information rather than invent missing details.
+- Describe apparent source conflicts and explain applicability only when supported by the supplied material.
+- Include numbered references identifying supporting documents and chunks.
+
+These are model instructions, not guarantees of correctness. The application does not independently validate generated claims or citations.
+
+The context includes document filenames and chunk identifiers. Statute sections can be referenced when present in the retrieved text; they are not currently stored as separate metadata fields.
+
+## Example Questions
+
+- What documents are required for an initial CMFO exam application?
+- What information must a repeat CPWM exam applicant submit?
+- What qualifications are required for the CTC exam?
+- How does the CMFO exam pathway differ from the CMFO/RMA exemption?
+- When can a county appoint or reappoint a chief financial officer?
+- What do the available documents say about QPA conflicts of interest?
+
+An example question does not imply that the current corpus contains all information needed to answer it.
+
+## Current Limitations
+
+- Retrieval uses vector similarity without keyword search or reranking.
+- Five chunks are retrieved by default.
+- No relevance threshold is applied before generation.
+- Character-based chunks may separate requirements from conditions or exceptions.
+- Only directly contained DOCX files are ingested.
+- Coverage depends on the available documents and their extracted text.
+- The application does not automatically check document currencor resolve legal authority.
+- Citations and factual claims are not programmatically verified.
+- Each question is processed independently; conversation history is not passed to the generation model.
+- The Gradio interface displays answers in a text box.
+- Authentication and role-based access controls are not implemented in the application code.
+- Index synchronization and automated evaluation remain future work.
+
+## Data Flow
+
+Source files, extracted chunks, and embeddings are processed locally and stored in the local vector database.
+
+When answering a question, the application sends the user's question and retrieved document passages to the Groq API.
+
+The prototype is intended for certification reference material. Do not enter credentials, applicant records, or sensitive information during testing.
+
+## Maintenance
+
+Maintaining unit: Digital Transformation Unit (DTU).
+
+Development activities include:
+
+- Maintaining source document coverage.
+- Verifying ingestion and index updates.
+- Reviewing retrieved evidence and generated answers.
+- Improving chunking and retrieval where testing identifies gaps.
+- Keeping dependencies and setup instructions aligned with the code.
+
+Production hosting, access controls, service arrangements, licensing review, and operational support are outside the current prototype scope.
 
 
-<!-- | # | Question | Expected answer | System response (summarized) | Retrieval quality | Response accuracy |
-|---|----------|-----------------|------------------------------|-------------------|-------------------|
-| 1 | | | | | |
-| 2 | | | | | |
-| 3 | | | | | |
-| 4 | | | | | |
-| 5 | | | | | |
-
-**Retrieval quality:** Relevant / Partially relevant / Off-target  
-**Response accuracy:** Accurate / Partially accurate / Inaccurate -->
-
----
-
-## Failure Case Analysis
-
-<!-- Identify at least one question where retrieval or generation did not work as expected.
-     Write a specific explanation of *why* it failed, tied to a part of the pipeline.
-
-     "The answer was wrong" is not an explanation.
-
-     "The relevant information was split across a chunk boundary, so retrieval returned
-     only half the context — the model didn't have enough to answer correctly" is an explanation.
-
-     "The embedding model treated the professor's nickname as out-of-vocabulary and returned
-     results from an unrelated review" is an explanation. -->
-
-**Question that failed:**
-
-What file formats does Spark natively support and how does it read them?
-
-**What the system returned:**
-
-The system correctly described how to read CSV, JSON, and Parquet using spark.read().csv(), spark.read().json(), and spark.read().parquet(), and mentioned using option() to customize behavior. It did not mention other formats like ORC, text, or Avro that are available in Spark’s full documentation.
-
-**Root cause (tied to a specific pipeline stage):**
-
-The question was broader than the ingested documents: the local documents contains detailed sections for CSV, JSON, Parquet, and some generic load/save options, but does not include full coverage of all possible formats. As a result, retrieval only surfaced chunks about the formats present in documents/spark/Document 9, 10, and 12, and the LLM had no grounded text describing ORC/text/Avro to draw on. This is primarily a document selection / coverage issue, not a chunking or embedding failure.
-
-**What you would change to fix it:**
-
-To fix this, the corpus should be expanded to include the relevant sections from the Spark docs that describe other formats (e.g., ORC, text, Avro) before re‑embedding. Alternatively, the evaluation question could be narrowed to “Which file formats are described in this guide and how does Spark read them?” to better match the scope of the ingested documents.
-
----
-
-## Spec Reflection
-
-<!-- Reflect on how planning.md shaped your implementation.
-     Answer both questions with at least 2–3 sentences each. -->
-
-**One way the spec helped you during implementation:**
-
-The planning.md spec made me determine the chunk sizes, overlap, and top k retrieval in the beginning so I was able to research many techniques and best practices. It became a checklust for testing the system instead of ad-hoc decisions.
-
-**One way your implementation diverged from the spec, and why:**
-
-The "Expected Anwers" in the planning.md file are much broader and encompass the entirety of Spark, which is much more detailed than what I was able to put in 12 documents in the corpus. The reason is that initially, the concepts to cover were much wider than the documentation that was finally extracted.
-
----
-
-## AI Usage
-
-<!-- Describe at least 2 specific instances where you used an AI tool during this project.
-     For each: what did you give the AI as input, what did it produce, and what did you
-     change, override, or direct differently?
-
-     "I used Claude to help me code" is not sufficient.
-     "I gave Claude my Chunking Strategy section from planning.md and asked it to implement
-     chunk_text(). It returned a function using a fixed character split. I overrode the
-     chunk size from 500 to 200 because my documents are short reviews, not long guides." -->
-
-**Instance 1**
-
-- *What I gave the AI:* The Chunking Strategy, Documents, and Architecture sections from planning.md, along with a description of the documents/spark/ folder and the requirement to use a recursive character splitter with 512‑character chunks and overlap.
-
-- *What it produced:*A Python script layout for an ingest_and_chunk.py module that used RecursiveCharacterTextSplitter with separators ["\n\n", "\n", " ", ""], loaded all .txt files from documents/spark/, applied chunking, and printed sample chunks.
-
-- *What I changed or overrode:* The initial suggestion was 75 characters for overlap and didn’t include metadata like doc_id and chunk_id. I adjusted the overlap to 100 characters to better preserve code blocks, added explicit doc and chunk identifiers to each chunk, idea derived from the initial project in the first class.
-
-**Instance 2**
-
-- *What I gave the AI:* The Retrieval Approach section and a high-level description of how the CLI should work: retrieve top‑5 chunks, build a context block, and call Groq’s llama-3.3-70b-versatile.
-
-- *What it produced:* A scaffold for embed_and_store.py and answer.py that initialized SentenceTransformer("all-MiniLM-L6-v2"), created a persistent Chroma collection, stored chunk embeddings with metadata, and implemented a answer_question() function that combined retrieval and Groq chat completions in a basic CLI loop.
-
-- *What I changed or overrode:* I added a ground system prompt to to require citation for each document, added error handling if the API key was missed, and cleaned output preview in the CLI.
